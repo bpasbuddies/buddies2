@@ -1,0 +1,93 @@
+CREATE OR REPLACE PROCEDURE eemrt.sp_get_TO_DETAILS(
+    p_UserId         VARCHAR2,
+    P_WORK_ORDERS_ID NUMBER DEFAULT 0,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+  /*
+  Procedure : sp_get_TO_DETAILS
+  Author: Sridhar Kommana
+  Date Created : 08/28/2015
+  Purpose:  Get Task orders for each contract.
+  Update history:
+  */
+  p_status VARCHAR2(100) :=NULL;
+BEGIN
+  SP_INSERT_AUDIT(p_UserId, 'sp_get_TO_DETAILS - Get Task Orders List for a contract P_WORK_ORDERS_ID= '||P_WORK_ORDERS_ID );
+        OPEN REC_CURSOR FOR 
+        SELECT WO.WORK_ORDERS_ID, WO.WORK_ORDER_NUMBER, WO.WORK_ORDER_Title, WO.ORGANIZATION ORGANIZATION, WO.FAA_POC FAA_POC, WO.START_DATE,
+            WO.END_DATE,
+        (
+        (SELECT NVL(SUM(NVL(W.CLIN_AMOUNT,0)) ,0)
+        FROM WORK_ORDERS_CLINS W
+        WHERE FK_WORK_ORDERS_ID = P_WORK_ORDERS_ID
+        ) +
+        (SELECT NVL(SUM(NVL(W.LC_AMOUNT,0)) ,0)
+        FROM WO_LABOR_CATEGORY W
+        WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+        )+
+(SELECT NVL(SUM(W.CLIN_AMOUNT),0)
+            FROM SUB_TASKS_CLINS W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            ) +
+            (SELECT NVL(SUM(NVL(W.LC_AMOUNT,0)) ,0)
+            FROM ST_LABOR_CATEGORY W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            )        
+        )
+      AS
+        WORK_ORDER_AMOUNT ,
+        (SELECT TO_CHAR( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' )
+        FROM LSD_WO_FUNDS LWF
+        WHERE -- POP.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER AND
+          LWF.WORK_ORDERS_ID =P_WORK_ORDERS_ID
+        )
+      AS
+        ALLOCATED , 
+        
+        ( 
+                (SELECT NVL(SUM(NVL(W.CLIN_AMOUNT,0)) ,0)
+        FROM WORK_ORDERS_CLINS W
+        WHERE FK_WORK_ORDERS_ID = P_WORK_ORDERS_ID
+        ) +
+        (SELECT NVL(SUM(NVL(W.LC_AMOUNT,0)) ,0)
+        FROM WO_LABOR_CATEGORY W
+        WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+        )+
+(SELECT NVL(SUM(W.CLIN_AMOUNT),0)
+            FROM SUB_TASKS_CLINS W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            ) +
+            (SELECT NVL(SUM(NVL(W.LC_AMOUNT,0)) ,0)
+            FROM ST_LABOR_CATEGORY W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            )  
+        )AS TOTAL_AMOUNT
+        
+        
+        FROM Work_Orders WO WHERE (WORK_ORDERS_ID = P_WORK_ORDERS_ID )
+      UNION
+          SELECT ST.SUB_TASKS_ID WORK_ORDERS_ID,
+            ST.SUB_TASK_NUMBER WORK_ORDER_NUMBER,
+            ST.SUB_TASK_TITLE WORK_ORDER_Title ,
+            ST.ORGANIZATION ORGANIZATION,
+            ST.FAA_POC FAA_POC,            ST.START_DATE,
+            ST.END_DATE,
+            (
+            (SELECT NVL(SUM(W.CLIN_AMOUNT),0)
+            FROM SUB_TASKS_CLINS W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            ) +
+            (SELECT NVL(SUM(NVL(W.LC_AMOUNT,0)) ,0)
+            FROM ST_LABOR_CATEGORY W
+            WHERE W.WORK_ORDERS_ID = P_WORK_ORDERS_ID
+            ) )AS WORK_ORDER_AMOUNT ,
+            (SELECT TO_CHAR( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' )
+            FROM LSD_WO_FUNDS LWF
+            WHERE --POP.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER AND
+              LWF.WORK_ORDERS_ID =P_WORK_ORDERS_ID
+            ) AS ALLOCATED ,0 AS TOTAL_AMOUNT
+          FROM SUB_TASKS ST
+          WHERE (SUB_TASKS_ID = P_WORK_ORDERS_ID)
+          ORDER BY WORK_ORDER_NUMBER ;
+END sp_get_TO_DETAILS;
+/

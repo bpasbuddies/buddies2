@@ -1,0 +1,45 @@
+CREATE OR REPLACE PROCEDURE eemrt.SP_Add_LSD_WO_FUNDS(
+    P_CONTRACT_NUMBER LSD_WO_FUNDS.CONTRACT_NUMBER%TYPE ,
+    P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+    P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+    P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+    p_User VARCHAR2, 
+    p_PStatus OUT VARCHAR2 )
+IS
+  BEGIN
+
+SP_INSERT_AUDIT(p_User, 'SP_Add_LSD_WO_FUNDS P_LSD='||P_LSD ||' P_AMOUNT='|| P_AMOUNT);
+
+  INSERT
+  INTO LSD_WO_FUNDS
+    (
+      LSD_WO_ID, 	
+      CONTRACT_NUMBER, 	
+      LSD,
+      WORK_ORDERS_ID, 	
+      AMOUNT, 	
+      CREATED_BY, 
+      CREATED_ON 
+    )
+    VALUES
+    (
+      LSD_WO_FUNDS_SEQ.NEXTVAL, 	
+      P_CONTRACT_NUMBER, 
+      P_LSD,
+      P_WORK_ORDERS_ID,
+      P_AMOUNT, 	
+      p_User, 
+      sysdate
+    );
+    IF SQL%FOUND THEN
+      p_PStatus := 'SUCCESS' ;
+      COMMIT;
+    ELSE      
+      p_PStatus := 'SP_Add_LSD_WO_FUNDS COULD NOT INSERT DATA' ;
+  END IF;
+  EXCEPTION
+  WHEN OTHERS THEN
+    p_PStatus := 'Error inserting FUNDS ' || SQLERRM ;
+    RETURN ;
+END SP_Add_LSD_WO_FUNDS;
+/

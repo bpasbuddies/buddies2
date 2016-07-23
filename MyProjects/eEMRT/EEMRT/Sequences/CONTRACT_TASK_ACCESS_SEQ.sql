@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.contract_task_access_seq;

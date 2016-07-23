@@ -1,0 +1,528 @@
+CREATE OR REPLACE PACKAGE BODY eemrt."PKG_FUNDING" AS
+
+ PROCEDURE SP_Add_LSD_WO_FUNDS(
+    P_CONTRACT_NUMBER LSD_WO_FUNDS.CONTRACT_NUMBER%TYPE ,
+    P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+    P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+    P_SUB_TASKS_ID LSD_WO_FUNDS.SUB_TASKS_ID%TYPE ,    
+    P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+    p_User VARCHAR2, 
+    p_PStatus OUT VARCHAR2 )
+IS
+  BEGIN
+
+SP_INSERT_AUDIT(p_User, 'P_LSD='||P_LSD ||' P_AMOUNT='|| P_AMOUNT);
+
+  INSERT
+  INTO LSD_WO_FUNDS
+    (
+      LSD_WO_ID, 	
+      CONTRACT_NUMBER, 	
+      LSD,
+      WORK_ORDERS_ID,
+      SUB_TASKS_ID,
+      AMOUNT, 	
+      CREATED_BY, 
+      CREATED_ON 
+    )
+    VALUES
+    (
+      LSD_WO_FUNDS_SEQ.NEXTVAL, 	
+      P_CONTRACT_NUMBER, 
+      P_LSD,
+      P_WORK_ORDERS_ID,
+      P_SUB_TASKS_ID,
+      P_AMOUNT, 	
+      p_User, 
+      sysdate
+    );
+    IF SQL%FOUND THEN
+      p_PStatus := 'SUCCESS' ;
+      COMMIT;
+    ELSE      
+      p_PStatus := 'COULD NOT INSERT DATA' ;
+  END IF;
+  EXCEPTION
+  WHEN OTHERS THEN
+    p_PStatus := 'Error inserting FUNDS ' || SQLERRM ;
+    RETURN ;
+END SP_Add_LSD_WO_FUNDS;
+
+ PROCEDURE sp_get_funds_summary(
+    p_UserId          VARCHAR2 DEFAULT NULL,
+    p_CONTRACT_NUMBER VARCHAR2 DEFAULT NULL,
+    FUND_TYPE_CURSOR OUT SYS_REFCURSOR,
+    contracts_cursor OUT SYS_REFCURSOR,
+    TOTAL_FUNDING_CURSOR OUT SYS_REFCURSOR ,
+    TOTAL_Hours_CURSOR OUT SYS_REFCURSOR)
+IS
+  vContractNUM CONTRACT.CONTRACT_NUMBER%TYPE;
+  vTotalObligation NUMBER :=0;
+BEGIN
+  vContractNUM := P_CONTRACT_NUMBER;
+  SP_INSERT_AUDIT(p_UserId, 'PKG_FUNDING.sp_get_contracts_funds ' || vContractNUM);
+  SELECT SUM(QUANTITY_ORDERED)
+  INTO vTotalObligation
+  FROM DELPHI_CONTRACT_DETAIL
+  WHERE CONTRACT_NUMBER = vContractNUM
+  AND FISCAL_YEAR      IS NOT NULL ;
+  OPEN FUND_TYPE_CURSOR FOR SELECT CONTRACT_NUMBER,
+  Total_Obligations,
+  Total_Conract_Obligations,
+  Total_Obligations_Percentage,
+  FUND_TYPE,
+  FUND_TYPE_Sort FROM
+  (SELECT CONTRACT_NUMBER,
+    NVL(SUM(QUANTITY_ORDERED),0)- NVL(SUM(QUANTITY_Cancelled),0) Total_Obligations,
+    vTotalObligation Total_Conract_Obligations,
+    NVL(SUM(QUANTITY_ORDERED),0) - NVL(SUM(QUANTITY_Cancelled),0) Total_Obligations_Percentage,
+    DECODE(FUND_TYPE,'OPS','1OPS', FUND_TYPE) AS FUND_TYPE_Sort,
+    FUND_TYPE
+  FROM DELPHI_CONTRACT_DETAIL
+  WHERE CONTRACT_NUMBER = vContractNUM --'DTFAWA-11-X-80007'
+  AND FISCAL_YEAR      IS NOT NULL
+  GROUP BY CONTRACT_NUMBER,
+    FUND_TYPE ,
+    DECODE(FUND_TYPE,'OPS','1OPS', FUND_TYPE)
+  ) tbl order by FUND_TYPE_Sort ASC ;
+  OPEN contracts_cursor FOR SELECT CONTRACT_NUMBER,
+  NVL(SUM(QUANTITY_ORDERED),0)- NVL(SUM(QUANTITY_Cancelled),0) Total_Obligations,
+  -- SUM(QUANTITY_ORDERED) / vTotalObligation Total_Obligations_Percentage,
+  FISCAL_YEAR FROM DELPHI_CONTRACT_DETAIL WHERE CONTRACT_NUMBER = vContractNUM AND FISCAL_YEAR IS NOT NULL Group by CONTRACT_NUMBER,
+  FISCAL_YEAR Order by CONTRACT_NUMBER,
+  FISCAL_YEAR ;
+  OPEN TOTAL_FUNDING_CURSOR FOR SELECT CONTRACT_NUMBER,
+  NVL(SUM(QUANTITY_ORDERED),0)- NVL(SUM(QUANTITY_Cancelled),0) Total_Obligations,
+  0
+AS
+  CeilingValue FROM DELPHI_CONTRACT_DETAIL WHERE CONTRACT_NUMBER = vContractNUM AND FISCAL_YEAR IS NOT NULL Group by CONTRACT_NUMBER ;
+  OPEN TOTAL_Hours_CURSOR -- Sum()
+  FOR SELECT dc.CONTRACT_NUMBER,
+  NVL(SUM( (
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM WORK_ORDERS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM WO_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM SUB_TASKS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM ST_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) ) ) , 0)
+AS
+  Total_Hours,
+  0
+AS
+  CeilingHours FROM CONTRACT dc INNER JOIN PERIOD_OF_PERFORMANCE p ON DC.CONTRACT_NUMBER = P.CONTRACT_NUMBER WHERE DC.CONTRACT_NUMBER = vContractNUM
+  -- AND FISCAL_YEAR IS NOT NULL
+  Group by DC.CONTRACT_NUMBER ;
+END sp_get_funds_summary;
+
+PROCEDURE sp_get_LSD_details(
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+BEGIN
+     OPEN REC_CURSOR
+      FOR
+        SELECT Contract_Number, LSD, ACCOUNTING_CODE,
+        Fiscal_Year,Fund_Type,RELEASE_NUM, PROJECT_NUMBER,TASK_NUMBER,ACCOUNT ACCOUNTING_STRING , 
+        QUANTITY_ORDERED, QUANTITY_CANCELLED, QUANTITY_RECEIVED,  QUANTITY_BILLED, OBLIGATED_BALANCE, BALANCE_AMOUNT FROM DELPHI_CONTRACT_DETAIL 
+        Where  (contract_number = p_contract_number)-- OR p_contract_number is null)
+        order by LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT 1 as Contract_Number, 1 as LSD, 1 as ACCOUNTING_CODE,
+         1 as RELEASE_NUM, 1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1  ACCOUNTING_STRING ,
+         1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED,  1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT FROM DELPHI_CONTRACT_DETAIL ;
+       
+END sp_get_LSD_details;
+
+ PROCEDURE sp_get_LSD_summary(
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+BEGIN
+     OPEN REC_CURSOR
+      FOR
+        SELECT Contract_Number, LSD, ACCOUNTING_CODE, QUANTITY_ORDERED, QUANTITY_CANCELLED, QUANTITY_RECEIVED,  QUANTITY_BILLED, OBLIGATED_BALANCE, BALANCE_AMOUNT FROM DELPHI_CONTRACT_DETAIL 
+        Where  (contract_number = p_contract_number)-- OR p_contract_number is null)
+        order by LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT 1 as Contract_Number, 1 as LSD, 1 as ACCOUNTING_CODE, 1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED,  1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT FROM DELPHI_CONTRACT_DETAIL ;
+       
+END sp_get_LSD_summary;
+
+ PROCEDURE sp_get_LSD_WO_FUNDS(
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+BEGIN
+ SP_INSERT_AUDIT('p_UserId', 'PKG_FUNDING.sp_get_LSD_WO_FUNDS   '||p_Contract_NUMBER   );
+     OPEN REC_CURSOR
+      FOR
+        SELECT 
+              LWF.LSD_WO_ID, LWF.CONTRACT_NUMBER, LWF.LSD, LWF.WORK_ORDERS_ID,LWF.SUB_TASKS_ID, LWF.AMOUNT, WO.WORK_ORDER_NUMBER, 
+              DC.ACCOUNTING_CODE, DC.QUANTITY_ORDERED, DC.QUANTITY_CANCELLED, DC.QUANTITY_RECEIVED, DC.QUANTITY_BILLED, DC.OBLIGATED_BALANCE, DC.BALANCE_AMOUNT
+              FROM LSD_WO_FUNDS LWF
+              INNER JOIN DELPHI_CONTRACT_DETAIL DC ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER
+                    AND LWF.LSD = DC.LSD
+              INNER JOIN WORK_ORDERS WO ON WO.WORK_ORDERS_ID = LWF.WORK_ORDERS_ID
+              LEFT OUTER JOIN SUB_TASKS ST on LWF.SUB_TASKS_ID = ST.SUB_TASKS_ID AND ST.SUB_TASKS_ID = LWF.SUB_TASKS_ID
+        Where  (LWF.contract_number = p_contract_number)
+        order by LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT 1 as LSD_WO_ID, 1 as CONTRACT_NUMBER, 1 as LSD, 1 as WORK_ORDERS_ID, 1 as SUB_TASKS_ID,  1 as AMOUNT, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT
+        FROM Dual;
+END sp_get_LSD_WO_FUNDS;
+PROCEDURE sp_get_LSD_WO_SUMM(
+    p_contract_number  varchar2 DEFAULT NULL,
+    p_lsd_str  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+/*
+  Procedure : sp_get_LSD_WO_SUMMARY
+  Author: Sridhar Kommana
+  Date Created : 03/19/2015
+  Purpose:  GET SUMMARY of  LSD_WO_FUNDS ALLOCATED
+  Update history: 
+  
+  sridhar kommana :
+  1) 03/23/2015 : Formatted number cols to show decimal points
+  2) 03/30/2015 : Changed to outer join to show all LSDs regardless of work order allocations.
+  
+*/
+ v_lsd_str apex_application_global.vc_arr2;
+ 
+BEGIN
+SP_INSERT_AUDIT('PKG_FUNDING.sp_get_LSD_WO_SUMM', 'p_lsd_str='||p_lsd_str ||' p_contract_number='|| p_contract_number); 
+   -- v_lsd_str    := apex_util.string_to_table(p_lsd_str, ',');
+     OPEN REC_CURSOR
+      FOR
+        SELECT 
+              DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,DC.Fiscal_Year, DC.Fund_Type, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNTING_CODE ACCOUNTING_STRING ,              
+              to_char( NVL( DC.QUANTITY_ORDERED, 0 ), '999,999,999,999,999.99' ) QUANTITY_ORDERED,
+              to_char( NVL( DC.QUANTITY_CANCELLED, 0 ), '999,999,999,999,999.99' ) QUANTITY_CANCELLED,
+              to_char( NVL( DC.QUANTITY_RECEIVED, 0 ), '999,999,999,999,999.99' ) QUANTITY_RECEIVED, 
+              to_char( NVL( DC.QUANTITY_BILLED, 0 ), '999,999,999,999,999.99' )  QUANTITY_BILLED, 
+              to_char( NVL( DC.OBLIGATED_BALANCE, 0 ), '999,999,999,999,999.99' )  OBLIGATED_BALANCE, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 ), '999,999,999,999,999.99' )  BALANCE_AMOUNT,
+              to_char( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as AMT_ALLOC_TO_WO, 
+              0.00 as INVOICE_PENDING
+              FROM  DELPHI_CONTRACT_DETAIL DC 
+              LEFT OUTER JOIN  LSD_WO_FUNDS LWF ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER
+                    AND LWF.LSD = DC.LSD
+                    AND LWF.LSD in (p_lsd_str)
+        Where  (DC.contract_number = p_contract_number)
+        GROUP BY  DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE, DC.Fiscal_Year, DC.Fund_Type,DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNT  ,
+              DC.QUANTITY_ORDERED, DC.QUANTITY_CANCELLED, DC.QUANTITY_RECEIVED, DC.QUANTITY_BILLED, DC.OBLIGATED_BALANCE, DC.BALANCE_AMOUNT
+        order by LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT   1 as CONTRACT_NUMBER, 1 as LSD,
+        --1 as WORK_ORDERS_ID, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as RELEASE_NUM,  1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1 as ACCOUNTING_STRING ,
+        1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT, 
+        1 as AMT_ALLOC_TO_WO, 1 as INVOICE_PENDING
+        FROM Dual;
+END sp_get_LSD_WO_SUMM;
+ PROCEDURE sp_get_LSD_WO_SUMMARY(
+    p_UserId  varchar2 DEFAULT NULL,
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+/*
+  Procedure : sp_get_LSD_WO_SUMMARY
+  Author: Sridhar Kommana
+  Date Created : 03/19/2015
+  Purpose:  GET SUMMARY of  LSD_WO_FUNDS ALLOCATED
+  Update history: 
+  
+  sridhar kommana :
+  1) 03/23/2015 : Formatted number cols to show decimal points
+  2) 03/30/2015 : Changed to outer join to show all LSDs regardless of work order allocations.
+ 
+*/
+BEGIN
+  SP_INSERT_AUDIT(p_UserId, 'PKG_FUNDING.sp_get_LSD_WO_SUMMARY - Contract Funding Summary Page p_contract_number='||p_contract_number );
+     OPEN REC_CURSOR
+      FOR
+        SELECT 
+              DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE, DC.Fiscal_Year, DC.Fund_Type, TO_CHAR(DC.OBLIGATION_EXPIRATION_DATE, 'MM/DD/YYYY') OBLIGATION_EXPIRATION_DATE, to_char(DC.EXPENDITURE_EXPIRATION_DATE, 'MM/DD/YYYY') EXPENDITURE_EXPIRATION_DATE,DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNTING_CODE ACCOUNTING_STRING ,              
+              to_char( NVL( DC.QUANTITY_ORDERED, 0 ), '999,999,999,999,999.99' ) QUANTITY_ORDERED,
+              to_char( NVL( DC.QUANTITY_CANCELLED, 0 ), '999,999,999,999,999.99' ) QUANTITY_CANCELLED,
+              to_char( NVL( DC.QUANTITY_RECEIVED, 0 ), '999,999,999,999,999.99' ) QUANTITY_RECEIVED, 
+              to_char( NVL( DC.QUANTITY_BILLED, 0 ), '999,999,999,999,999.99' )  QUANTITY_BILLED, 
+              to_char( NVL( DC.OBLIGATED_BALANCE, 0 ), '999,999,999,999,999.99' )  OBLIGATED_BALANCE, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 ), '999,999,999,999,999.99' )  BALANCE_AMOUNT,
+              to_char( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as AMT_ALLOC_TO_WO, 
+              0.00 as INVOICE_PENDING 
+              FROM  DELPHI_CONTRACT_DETAIL DC 
+              LEFT OUTER JOIN  LSD_WO_FUNDS LWF ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER
+                    AND LWF.LSD = DC.LSD
+        Where  (DC.contract_number = p_contract_number)
+        GROUP BY  DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,DC.Fiscal_Year, DC.Fund_Type, DC.OBLIGATION_EXPIRATION_DATE, DC.EXPENDITURE_EXPIRATION_DATE, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNT  ,
+              DC.QUANTITY_ORDERED, DC.QUANTITY_CANCELLED, DC.QUANTITY_RECEIVED, DC.QUANTITY_BILLED, DC.OBLIGATED_BALANCE, DC.BALANCE_AMOUNT 
+        order by   LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT   1 as CONTRACT_NUMBER, 1 as LSD,
+        --1 as WORK_ORDERS_ID, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as RELEASE_NUM,  1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1 as ACCOUNTING_STRING ,
+        1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT, 
+        1 as AMT_ALLOC_TO_WO, 1 as INVOICE_PENDING
+        FROM Dual;
+END sp_get_LSD_WO_SUMMARY;
+
+
+PROCEDURE sp_get_LSDs(
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+BEGIN
+     OPEN REC_CURSOR
+      FOR
+        SELECT LSD, LSD || ' ' || ACCOUNTING_CODE as LSD_DESCRIPTION FROM DELPHI_CONTRACT_DETAIL 
+        Where  (contract_number = p_contract_number)-- OR p_contract_number is null)
+        order by LSD;  
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT 1 as LSD , 1 as LSD_DESCRIPTION FROM DELPHI_CONTRACT_DETAIL ;
+        
+END sp_get_LSDs;
+
+ PROCEDURE sp_GetLSDFundsByLSDs(
+    p_UserId  varchar2 DEFAULT NULL,
+    p_contract_number  varchar2 DEFAULT NULL,
+    p_lsd_str  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+/*
+  Procedure : sp_GetLSDFundsByLSDs
+  Author: Sridhar Kommana
+  Date Created : 04/03/2015
+  Purpose:  GET SUMMARY of  LSD_WO_FUNDS ALLOCATED
+  Update history: 
+  
+  sridhar kommana :
+  1) 04/03/2015 : Converted into dynamic to support multiple values
+ 
+  
+*/
+ v_lsd_str VARCHAR2(4000);
+ v_SQL VARCHAR2(4000):=NULL;
+ v_Contract_Number VARCHAR2(100):=NULL;
+BEGIN
+v_lsd_str := substr(p_lsd_str,1,length(p_lsd_str)-1);
+v_lsd_str := ''''||Replace(v_lsd_str, ',',''',''')||'''';
+v_Contract_Number :=P_CONTRACT_NUMBER;
+v_SQL :='SELECT
+              DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,   DC.Fiscal_Year, DC.Fund_Type,DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNTING_CODE ACCOUNTING_STRING ,              
+              to_char( NVL( DC.QUANTITY_ORDERED, 0 ), ''999,999,999,999,999.99'' ) QUANTITY_ORDERED,
+              to_char( NVL( DC.QUANTITY_CANCELLED, 0 ), ''999,999,999,999,999.99'' ) QUANTITY_CANCELLED,
+              to_char( NVL( DC.QUANTITY_RECEIVED, 0 ), ''999,999,999,999,999.99'' ) QUANTITY_RECEIVED, 
+              to_char( NVL( DC.QUANTITY_BILLED, 0 ), ''999,999,999,999,999.99'' )  QUANTITY_BILLED, 
+              to_char( NVL( DC.OBLIGATED_BALANCE, 0 ), ''999,999,999,999,999.99'' )  OBLIGATED_BALANCE, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 ), ''999,999,999,999,999.99'' )  BALANCE_AMOUNT,
+              to_char( NVL( SUM(LWF.AMOUNT), 0 ), ''999,999,999,999,999.99'' ) as ALLOCATED, 
+              NVL( DC.BALANCE_AMOUNT, 0 )- NVL( SUM(LWF.AMOUNT), 0 ) as AMT_AVAIL_TO_ALLOC ,             
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 )- NVL( SUM(LWF.AMOUNT), 0 ) , ''999,999,999,999,999.99'' ) as AMT_AVAIL_TO_ALLOC_DISP             
+              FROM DELPHI_CONTRACT_DETAIL DC 
+              LEFT OUTER JOIN LSD_WO_FUNDS LWF              
+              ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER AND LWF.LSD = DC.LSD                  
+        Where  (DC.contract_number = '''||p_contract_number||''' AND DC.LSD in ('||v_lsd_str||'))
+        GROUP BY  DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,DC.Fiscal_Year, DC.Fund_Type, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNT  ,
+              DC.QUANTITY_ORDERED, DC.QUANTITY_CANCELLED, DC.QUANTITY_RECEIVED, DC.QUANTITY_BILLED, DC.OBLIGATED_BALANCE, DC.BALANCE_AMOUNT
+        order by LSD'; 
+SP_INSERT_AUDIT(p_UserId, 'PKG_FUNDING.sp_GetLSDFundsByLSDs p_lsd_str= '|| p_lsd_str || ' v_lsd_str='||v_lsd_str ||' p_contract_number='|| p_contract_number); 
+ -- SP_INSERT_AUDIT(p_contract_number, v_SQL);
+
+   
+         OPEN REC_CURSOR for v_SQL; 
+
+ 
+ 
+EXCEPTION
+WHEN OTHERS THEN
+  
+  OPEN REC_CURSOR FOR 
+        SELECT   1 as CONTRACT_NUMBER, 1 as LSD,
+        --1 as WORK_ORDERS_ID, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as RELEASE_NUM,  1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1 as ACCOUNTING_STRING ,
+        1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT, 
+        1 as AMT_ALLOC_TO_WO, 1 as INVOICE_PENDING
+        FROM Dual;
+        
+END sp_GetLSDFundsByLSDs;
+
+PROCEDURE sp_Show_LSDs_Funds(
+    p_UserId          VARCHAR2 DEFAULT NULL,
+    p_contract_number  varchar2 DEFAULT NULL,
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+/*
+  Procedure : sp_Show_LSDs_Funds
+  Author: Sridhar Kommana
+  Date Created : 03/30/2015
+  Purpose:  GET LSDs and related funded information for funding screen.
+  Update history: 
+  
+ 
+*/
+BEGIN
+     SP_INSERT_AUDIT(p_UserId, 'PKG_FUNDING.sp_Show_LSDs_Funds  GET LSDs and related funded information for funding screen. p_contract_number '||p_contract_number);
+     OPEN REC_CURSOR
+      FOR
+        SELECT 
+              DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,   DC.Fiscal_Year, DC.Fund_Type, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNTING_CODE ACCOUNTING_STRING ,              
+              to_char( NVL( DC.QUANTITY_ORDERED, 0 ), '999,999,999,999,999.99' ) QUANTITY_ORDERED,
+              to_char( NVL( DC.QUANTITY_CANCELLED, 0 ), '999,999,999,999,999.99' ) QUANTITY_CANCELLED,
+              to_char( NVL( DC.QUANTITY_RECEIVED, 0 ), '999,999,999,999,999.99' ) QUANTITY_RECEIVED, 
+              to_char( NVL( DC.QUANTITY_BILLED, 0 ), '999,999,999,999,999.99' )  QUANTITY_BILLED, 
+              to_char( NVL( DC.OBLIGATED_BALANCE, 0 ), '999,999,999,999,999.99' )  OBLIGATED_BALANCE, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 ), '999,999,999,999,999.99' )  BALANCE_AMOUNT,
+              to_char( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as ALLOCATED, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 )- NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as AMT_AVAIL_TO_ALLOC              
+              FROM DELPHI_CONTRACT_DETAIL DC 
+              LEFT OUTER JOIN LSD_WO_FUNDS LWF              
+              ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER AND LWF.LSD = DC.LSD
+        Where  (DC.CONTRACT_NUMBER = p_contract_number)    
+        having (NVL(DC.BALANCE_AMOUNT, 0 )- NVL( SUM(LWF.AMOUNT),0))>0
+        GROUP BY  DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE, DC.Fiscal_Year, DC.Fund_Type,DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNT  ,
+              DC.QUANTITY_ORDERED, DC.QUANTITY_CANCELLED, DC.QUANTITY_RECEIVED, DC.QUANTITY_BILLED, DC.OBLIGATED_BALANCE, DC.BALANCE_AMOUNT
+        order by LSD;   
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT   1 as CONTRACT_NUMBER, 1 as LSD,
+        --1 as WORK_ORDERS_ID, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as RELEASE_NUM,  1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1 as ACCOUNTING_STRING ,
+        1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT, 
+        1 as ALLOCATED,1 as AMT_AVAIL_TO_ALLOC
+        FROM Dual;
+END sp_Show_LSDs_Funds;
+
+PROCEDURE sp_Show_LSDs_WO_Funds(
+    p_UserId  varchar2 DEFAULT NULL,
+    p_contract_number  varchar2 DEFAULT NULL,
+    p_WO_ID  number DEFAULT NULL,
+    P_SUB_TASKS_ID LSD_WO_FUNDS.SUB_TASKS_ID%TYPE DEFAULT 0 ,            
+    REC_CURSOR OUT SYS_REFCURSOR)
+AS
+/*
+  Procedure : sp_Show_LSDs_WO_Funds
+  Author: Sridhar Kommana
+  Date Created : 04/20/2015
+  Purpose:  GET WORK ORDER, LSDs funding information for WORK ORDER FUNDING SUMMARY screen.
+  Update history: 
+  
+ 
+*/
+BEGIN
+ SP_INSERT_AUDIT(p_UserId, 'PKG_FUNDING.sp_Show_LSDs_WO_Funds contract '||p_Contract_NUMBER ||' p_WO_ID = '||p_WO_ID ||' P_SUB_TASKS_ID= '||P_SUB_TASKS_ID  );
+     OPEN REC_CURSOR
+      FOR
+        SELECT 
+              DC.CONTRACT_NUMBER, DC.LSD,
+              DC.ACCOUNTING_CODE,  DC.Fiscal_Year, DC.Fund_Type, DC.OBLIGATION_EXPIRATION_DATE, DC.EXPENDITURE_EXPIRATION_DATE, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER,DC.ACCOUNTING_CODE ACCOUNTING_STRING ,              
+              to_char( NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as ALLOCATED, 
+              to_char( NVL( DC.BALANCE_AMOUNT, 0 )- NVL( SUM(LWF.AMOUNT), 0 ), '999,999,999,999,999.99' ) as AMT_AVAIL_TO_ALLOC,
+              0.00 as INVOICED,  to_char( NVL( SUM(LWF.AMOUNT), 0 )-0, '999,999,999,999,999.99' ) as Funding_Balance
+              FROM DELPHI_CONTRACT_DETAIL DC 
+              LEFT OUTER JOIN LSD_WO_FUNDS LWF              
+              ON DC.CONTRACT_NUMBER = LWF.CONTRACT_NUMBER AND LWF.LSD = DC.LSD
+        Where  (DC.CONTRACT_NUMBER = p_contract_number AND  LWF.WORK_ORDERS_ID =  p_WO_ID AND SUB_TASKS_ID = P_SUB_TASKS_ID   --OR  (LWF.WORK_ORDERS_ID =  p_WO_ID AND SUB_TASKS_ID is NULL )  
+              )        
+        GROUP BY  DC.CONTRACT_NUMBER, DC.LSD, WORK_ORDERS_ID,
+              DC.ACCOUNTING_CODE,  DC.Fiscal_Year, DC.Fund_Type,  DC.OBLIGATION_EXPIRATION_DATE, DC.EXPENDITURE_EXPIRATION_DATE, DC.RELEASE_NUM, DC.PROJECT_NUMBER, DC.TASK_NUMBER, DC.BALANCE_AMOUNT
+        order by LSD;   
+EXCEPTION
+WHEN OTHERS THEN
+  OPEN REC_CURSOR FOR 
+        SELECT   1 as CONTRACT_NUMBER, 1 as LSD,
+        --1 as WORK_ORDERS_ID, 1 as WORK_ORDER_NUMBER, 
+        1 as ACCOUNTING_CODE, 1 as RELEASE_NUM,  1 as PROJECT_NUMBER, 1 as TASK_NUMBER, 1 as ACCOUNTING_STRING ,
+        --1 as QUANTITY_ORDERED, 1 as QUANTITY_CANCELLED, 1 as QUANTITY_RECEIVED, 1 as QUANTITY_BILLED, 1 as OBLIGATED_BALANCE, 1 as BALANCE_AMOUNT, 
+        1 as ALLOCATED,1 as AMT_AVAIL_TO_ALLOC
+        FROM Dual;
+END sp_Show_LSDs_WO_Funds;
+
+ PROCEDURE SP_Update_LSD_WO_FUNDS(
+    p_LSD_WO_ID LSD_WO_FUNDS.LSD_WO_ID%TYPE,
+    P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+    P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+    P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+    p_User VARCHAR2, 
+    p_PStatus OUT VARCHAR2 )
+IS
+  BEGIN
+
+SP_INSERT_AUDIT('PKG_FUNDING.sp_Update_LSD_WO_FUNDS by ' ||p_User, 'p_LSD_WO_ID='||p_LSD_WO_ID ||' P_AMOUNT='|| P_AMOUNT);
+
+  Update
+   LSD_WO_FUNDS
+   SET  	
+      LSD = P_LSD ,
+      WORK_ORDERS_ID = P_WORK_ORDERS_ID, 	
+      AMOUNT = P_AMOUNT, 	
+      LAST_MODIFIED_BY = p_User, 
+      LAST_MODIFIED_ON = sysdate 
+    WHERE  LSD_WO_ID = p_LSD_WO_ID ; 
+    
+    IF SQL%FOUND THEN
+      p_PStatus := 'SUCCESS' ;
+      COMMIT;
+    ELSE      
+      p_PStatus := 'COULD NOT UPDATE DATA' ;
+  END IF;
+  EXCEPTION
+  WHEN OTHERS THEN
+    p_PStatus := 'Error updating FUNDS ' || SQLERRM ;
+    RETURN ;
+END SP_Update_LSD_WO_FUNDS;
+
+END PKG_FUNDING;
+/

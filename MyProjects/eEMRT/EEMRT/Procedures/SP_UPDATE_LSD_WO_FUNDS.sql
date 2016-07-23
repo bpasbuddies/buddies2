@@ -1,0 +1,34 @@
+CREATE OR REPLACE PROCEDURE eemrt.SP_Update_LSD_WO_FUNDS(
+    p_LSD_WO_ID LSD_WO_FUNDS.LSD_WO_ID%TYPE,
+    P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+    P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+    P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+    p_User VARCHAR2, 
+    p_PStatus OUT VARCHAR2 )
+IS
+  BEGIN
+
+SP_INSERT_AUDIT(p_User , 'SP_Update_LSD_WO_FUNDS by ' ||p_User|| 'p_LSD_WO_ID='||p_LSD_WO_ID ||' P_AMOUNT='|| P_AMOUNT);
+
+  Update
+   LSD_WO_FUNDS
+   SET  	
+      LSD = P_LSD ,
+      WORK_ORDERS_ID = P_WORK_ORDERS_ID, 	
+      AMOUNT = P_AMOUNT, 	
+      LAST_MODIFIED_BY = p_User, 
+      LAST_MODIFIED_ON = sysdate 
+    WHERE  LSD_WO_ID = p_LSD_WO_ID ; 
+    
+    IF SQL%FOUND THEN
+      p_PStatus := 'SUCCESS' ;
+      COMMIT;
+    ELSE      
+      p_PStatus := 'COULD NOT UPDATE DATA' ;
+  END IF;
+  EXCEPTION
+  WHEN OTHERS THEN
+    p_PStatus := 'Error updating FUNDS ' || SQLERRM ;
+    RETURN ;
+END SP_Update_LSD_WO_FUNDS;
+/

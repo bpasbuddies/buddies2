@@ -1,0 +1,20 @@
+CREATE TABLE eemrt.sub_task_order (
+  sub_task_order_id NUMBER NOT NULL,
+  fk_work_order_id NUMBER NOT NULL,
+  fk_period_of_performance_id NUMBER,
+  sub_task_order_number VARCHAR2(20 BYTE),
+  sub_task_order_title VARCHAR2(1000 BYTE),
+  start_date DATE,
+  end_date DATE,
+  description VARCHAR2(2000 BYTE),
+  "ORGANIZATION" VARCHAR2(200 BYTE),
+  faa_poc VARCHAR2(2000 BYTE),
+  status VARCHAR2(20 BYTE),
+  created_by VARCHAR2(50 BYTE),
+  created_on TIMESTAMP,
+  last_modified_by VARCHAR2(50 BYTE),
+  last_modified_on TIMESTAMP,
+  CONSTRAINT sub_task_order_pk PRIMARY KEY (sub_task_order_id),
+  CONSTRAINT fk_pop_fk1 FOREIGN KEY (fk_period_of_performance_id) REFERENCES eemrt.period_of_performance (period_of_performance_id),
+  CONSTRAINT fk_work_order_fk1 FOREIGN KEY (fk_work_order_id) REFERENCES eemrt.work_orders (work_orders_id)
+);

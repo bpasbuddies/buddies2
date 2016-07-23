@@ -1,0 +1,169 @@
+CREATE OR REPLACE PROCEDURE eemrt.sp_get_pop(
+    p_UserId                   VARCHAR2 DEFAULT NULL,
+    p_Contract_NUMBER          VARCHAR2 DEFAULT NULL ,
+    P_PERIOD_OF_PERFORMANCE_ID VARCHAR2 DEFAULT NULL,
+    sum_cursor OUT SYS_REFCURSOR)
+AS
+  /*
+  Procedure : sp_get_pop
+  Author: Sridhar Kommana
+  Date Created : 11/05/2014
+  Purpose:  Get POP Details for a given contract or POPID
+  Update history:
+  sridhar kommana :
+  1) 07/16/2015 : Modified minus counts from WORK_ORDERS_CLINS and WO_LABOR_CATEGORY
+  2) 08/15/2015 : Modified query minus from Sub-Task tables
+  */
+BEGIN
+  SP_INSERT_AUDIT(p_UserId, 'Get Period of performance details for contract '||p_Contract_NUMBER ||' P_PERIOD_OF_PERFORMANCE_ID = '||P_PERIOD_OF_PERFORMANCE_ID );
+  --SP_INSERT_AUDIT(p_UserId, 'sp_get_pop '||p_Contract_NUMBER);
+  OPEN sum_cursor FOR SELECT PERIOD_OF_PERFORMANCE_ID, pop_TYPE
+AS
+  POP_TYPE_LABEL, c.CONTRACT_NUMBER, c.vendor, p.START_DATE, p.END_DATE, p.STATUS , p.POP_TYPE,
+  (SELECT NVL(SUM(CLIN_HOURS),0) + NVL(SUM(SUB_CLIN_HOURS),0)
+  FROM POP_CLIN PC
+  LEFT OUTER JOIN SUB_CLIN S
+  ON S.clin_id                      = PC.clin_id
+  WHERE PC.period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  )
+AS
+  CEILING_HOURS, (
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM WORK_ORDERS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM WO_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM SUB_TASKS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM ST_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) )
+AS
+  COMMITTED_HOURS, 0
+AS
+  "USED_HOURS",
+  (SELECT NVL(SUM(CLIN_HOURS),0) + NVL(SUM(SUB_CLIN_HOURS),0)
+  FROM POP_CLIN PC
+  LEFT OUTER JOIN SUB_CLIN S
+  ON S.clin_id                      = PC.clin_id
+  WHERE PC.period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  ) -
+  (
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM WORK_ORDERS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM WO_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM(CLIN_HOURS),0)
+  FROM SUB_TASKS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    AND C.Clin_Type                 <> 'Contract'
+    )
+  ) +
+  (SELECT NVL(SUM(WLC.LABOR_CATEGORY_HOURS),0)
+  FROM ST_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) )
+AS
+  BALANCE_HOURS,
+  (SELECT NVL(SUM(CLIN_AMOUNT),0) + NVL(SUM(SUB_CLIN_AMOUNT),0)
+  FROM POP_CLIN PC
+  LEFT OUTER JOIN SUB_CLIN S
+  ON S.clin_id                      = PC.clin_id
+  WHERE PC.period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  )
+AS
+  CEILING_AMOUNT, p.OBLIGATED_AMOUNT, --Amount ceiling
+  P.EXPENDED_AMOUNT,                  -- Total invoice Amount  ,
+  (SELECT NVL(SUM(CLIN_AMOUNT),0) + NVL(SUM(SUB_CLIN_AMOUNT),0)
+  FROM POP_CLIN PC
+  LEFT OUTER JOIN SUB_CLIN S
+  ON S.clin_id                      = PC.clin_id
+  WHERE PC.period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  ) -
+  (
+  (SELECT NVL(SUM(CLIN_AMOUNT),0)
+  FROM WORK_ORDERS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM( WLC.LC_AMOUNT),0)
+  FROM WO_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM(CLIN_AMOUNT),0)
+  FROM SUB_TASKS_CLINS WOC
+  WHERE WOC.FK_period_of_performance_id = p.PERIOD_OF_PERFORMANCE_ID
+  AND WOC.CLIN_ID                      IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) +
+  (SELECT NVL(SUM( WLC.LC_AMOUNT),0)
+  FROM ST_LABOR_CATEGORY WLC
+  WHERE WLC.CLIN_ID IN
+    (SELECT C.CLIN_ID
+    FROM pop_clin c
+    WHERE c.PERIOD_OF_PERFORMANCE_ID = p.PERIOD_OF_PERFORMANCE_ID
+    )
+  ) )
+AS
+  BALANCE_AMOUNT FROM contract c , PERIOD_OF_PERFORMANCE p WHERE (c.contract_number = p_Contract_NUMBER OR P_Contract_Number IS NULL) AND (P.PERIOD_OF_PERFORMANCE_ID = P_PERIOD_OF_PERFORMANCE_ID OR P_PERIOD_OF_PERFORMANCE_ID IS NULL) AND c.CONTRACT_NUMBER = p.CONTRACT_NUMBER order by PERIOD_OF_PERFORMANCE_ID ASC;
+END sp_get_pop;
+/

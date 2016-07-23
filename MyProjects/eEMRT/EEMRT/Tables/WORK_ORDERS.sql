@@ -1,0 +1,20 @@
+CREATE TABLE eemrt.work_orders (
+  work_orders_id NUMBER NOT NULL,
+  work_order_number VARCHAR2(20 BYTE),
+  work_order_title VARCHAR2(1000 BYTE),
+  start_date DATE,
+  end_date DATE,
+  description VARCHAR2(2000 BYTE),
+  "ORGANIZATION" VARCHAR2(200 BYTE),
+  faa_poc VARCHAR2(2000 BYTE),
+  period_of_performance_id NUMBER,
+  created_by VARCHAR2(50 BYTE),
+  created_on TIMESTAMP,
+  last_modified_by VARCHAR2(50 BYTE),
+  last_modified_on TIMESTAMP,
+  status VARCHAR2(20 BYTE),
+  sub_task VARCHAR2(1 BYTE),
+  wo_fee NUMBER(35,5),
+  CONSTRAINT work_orders_pk PRIMARY KEY (work_orders_id),
+  CONSTRAINT work_orders_uk1 UNIQUE (work_order_number,period_of_performance_id)
+);

@@ -1,0 +1,1 @@
+CREATE INDEX eemrt.usr_idx ON eemrt.users_audit(username);

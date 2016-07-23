@@ -1,0 +1,20 @@
+CREATE TABLE eemrt.task_orders_old (
+  task_orders_id NUMBER NOT NULL,
+  period_of_performance_id NUMBER,
+  taskordernumber NUMBER,
+  description VARCHAR2(1000 BYTE),
+  "ORGANIZATION" VARCHAR2(1000 BYTE),
+  start_date DATE,
+  end_date DATE,
+  estimated_hours NUMBER(*,0),
+  used_hours NUMBER(*,0),
+  estimated_cost NUMBER(18,2),
+  obligated_amount NUMBER(18,2),
+  expended_amount NUMBER(18,2),
+  created_by VARCHAR2(50 BYTE) DEFAULT 'SYS',
+  created_on TIMESTAMP DEFAULT SYSDATE,
+  last_modified_by VARCHAR2(50 BYTE),
+  last_modified_on TIMESTAMP,
+  contract_number VARCHAR2(100 BYTE),
+  PRIMARY KEY (task_orders_id)
+);

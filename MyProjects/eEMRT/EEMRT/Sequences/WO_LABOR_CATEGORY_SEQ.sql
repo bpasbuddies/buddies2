@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.wo_labor_category_seq NOCACHE;

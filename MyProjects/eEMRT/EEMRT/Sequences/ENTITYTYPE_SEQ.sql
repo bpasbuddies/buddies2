@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.entitytype_seq NOCACHE;

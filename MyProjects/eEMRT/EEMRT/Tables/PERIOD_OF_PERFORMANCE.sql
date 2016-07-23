@@ -1,0 +1,20 @@
+CREATE TABLE eemrt.period_of_performance (
+  period_of_performance_id NUMBER NOT NULL,
+  contract_number VARCHAR2(100 BYTE),
+  start_date DATE,
+  end_date DATE,
+  status VARCHAR2(10 BYTE),
+  pop_type VARCHAR2(40 BYTE),
+  ceiling_hours NUMBER(*,0),
+  committed_hours NUMBER(*,0),
+  used_hours NUMBER(*,0),
+  ceiling_amount NUMBER(18,2),
+  obligated_amount NUMBER(18,2),
+  expended_amount NUMBER(18,2),
+  created_by VARCHAR2(50 BYTE) DEFAULT 'SYS',
+  created_on TIMESTAMP DEFAULT SYSDATE,
+  last_modified_by VARCHAR2(50 BYTE),
+  last_modified_on TIMESTAMP,
+  PRIMARY KEY (period_of_performance_id),
+  CONSTRAINT period_of_performance_r01 FOREIGN KEY (contract_number) REFERENCES eemrt.contract (contract_number)
+);

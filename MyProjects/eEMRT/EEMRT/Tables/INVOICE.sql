@@ -1,0 +1,21 @@
+CREATE TABLE eemrt.invoice (
+  invoice_id NUMBER NOT NULL,
+  contract_number VARCHAR2(200 BYTE) NOT NULL,
+  vendor VARCHAR2(200 BYTE) NOT NULL,
+  period_of_performance_id NUMBER NOT NULL,
+  invoice_number VARCHAR2(200 BYTE) NOT NULL,
+  invoice_date TIMESTAMP,
+  invoice_period_from DATE,
+  invoice_period_to DATE,
+  invoice_amount NUMBER(*,2),
+  invoice_received_date DATE,
+  created_by VARCHAR2(50 BYTE),
+  created_on TIMESTAMP,
+  last_modified_by VARCHAR2(50 BYTE),
+  last_modified_on TIMESTAMP,
+  status VARCHAR2(20 BYTE),
+  invoice_due_date DATE,
+  temp_entity_id VARCHAR2(1000 BYTE),
+  CONSTRAINT invoice_pk PRIMARY KEY (invoice_id),
+  CONSTRAINT invoice_uk1 UNIQUE (invoice_number,contract_number)
+);

@@ -1,0 +1,144 @@
+CREATE OR REPLACE PROCEDURE eemrt.SP_MERGE_STAGE2_DETAIL(
+    p_PStatus OUT VARCHAR2)
+IS
+/*
+  Procedure : SP_MERGE_STAGE2_DETAIL
+  Author: Sridhar Kommana
+  Date Created : 03/17/2015
+  Purpose: Update DELPHI_CONTRACT_DETAIL with changes from DELPHI_CONTRACT_STAGE table on a daily basis. 
+           DELPHI_CONTRACT_STAGE is populated from discoverer report on a daily basis.
+  updates:
+    sridhar on 03/23/2015 added     FUND, BUDYEAR, BPAC, ORGCODE, OBJECT_CLASS,   
+    sridhar kommana : added     DS.line_item,     DS.matching_type,    DS.MULTIPLIER to support : We need  matching_type field to identify the contract to see if it's belongs to 2-way or 3-way match.If the contract is belongs to 3-way match then Sjawn wanted us to bring the Acceptance data from Prism system in future.
+  */
+  vMessage VARCHAR2(32000);
+BEGIN
+  MERGE INTO DELPHI_CONTRACT_DETAIL D USING
+  (SELECT DS.PO_NUMBER
+    ||DECODE(DS.RELEASE_NUM,'9999',NULL,null, NULL,'/'
+    ||DS.RELEASE_NUM) CONTRACT_NUMBER,
+    DS.LINE_NUM
+    ||'-'
+    ||DS.SHIPMENT_NUMBER
+    ||'-'
+    ||DS.DISTRIBUTION_NUM LSD,
+    DS.CHARGE_ACCOUNT ACCOUNTING_CODE,
+    DS.QUANTITY_ORDERED,
+    DS.QUANTITY_CANCELLED,
+    DS.QUANTITY_RECEIVED,
+    DS.QUANTITY_BILLED,
+    DS.OBLIGATED_BALANCE,
+    DS.NET_QTY_ORDERED BALANCE_AMOUNT, 
+    DS.RELEASE_NUM, 
+    DS.PROJECT_NUMBER, 
+    DS.TASK_NUMBER, 
+    DS.ACCOUNT, 
+    DS.FUND, 
+    DS.BUDYEAR, 
+	  DS.BPAC, 
+	  DS.ORGCODE, 
+	  DS.OBJECT_CLASS,     
+    DS.STAGE_DATE,
+    DS.FISCAL_YEAR, 
+	  DS.FUND_TYPE, 
+	  DS.OBLIGATION_EXPIRATION_DATE, 
+    DS.EXPENDITURE_EXPIRATION_DATE,
+    DS.line_item, 
+    DS.matching_type,
+    DS.MULTIPLIER
+  FROM DELPHI_CONTRACT_STAGE DS, contract_summary_gl G where DS.PO_NUMBER||DECODE(DS.RELEASE_NUM,'9999',NULL,null, NULL,'/'||DS.RELEASE_NUM) = G.PO_NUMBER
+  ) S ON (D.CONTRACT_NUMBER = S.CONTRACT_NUMBER AND D.LSD = S.LSD
+  )
+WHEN MATCHED THEN
+  UPDATE
+  SET D.QUANTITY_ORDERED = S.QUANTITY_ORDERED ,
+    D.QUANTITY_CANCELLED = S.QUANTITY_CANCELLED,
+    D.QUANTITY_RECEIVED  = S.QUANTITY_RECEIVED,
+    D.QUANTITY_BILLED    = S.QUANTITY_BILLED,
+    D.OBLIGATED_BALANCE  = S.OBLIGATED_BALANCE ,
+    D.BALANCE_AMOUNT     = S.BALANCE_AMOUNT, 
+    D.RELEASE_NUM = S.RELEASE_NUM,
+    D.PROJECT_NUMBER = S.PROJECT_NUMBER,
+    D.TASK_NUMBER = S.TASK_NUMBER,
+    D.ACCOUNT  = S.ACCOUNT, 
+    D.FUND =   S.FUND, 
+    D.BUDYEAR = S.BUDYEAR, 
+	  D.BPAC = S.BPAC, 
+	  D.ORGCODE = S.ORGCODE, 
+	  D.OBJECT_CLASS = S.OBJECT_CLASS,     
+    D.STAGE_DATE = S.STAGE_DATE,
+    D.FISCAL_YEAR = S.FISCAL_YEAR, 
+	  D.FUND_TYPE = S.FUND_TYPE, 
+	  D.OBLIGATION_EXPIRATION_DATE = S.OBLIGATION_EXPIRATION_DATE, 
+    D.EXPENDITURE_EXPIRATION_DATE = S.EXPENDITURE_EXPIRATION_DATE,  
+    D.line_item=S.line_item, 
+    D.matching_type = S.matching_type,
+    D.MULTIPLIER = S.MULTIPLIER,
+    LAST_MODIFIED_BY = 'DELPHI', LAST_MODIFIED_ON  = sysdate WHEN NOT MATCHED THEN
+  INSERT
+    (
+      D.CONTRACT_NUMBER,
+      D.LSD,
+      D.ACCOUNTING_CODE,
+      D.QUANTITY_ORDERED,
+      D.QUANTITY_CANCELLED,
+      D.QUANTITY_RECEIVED,
+      D.QUANTITY_BILLED,
+      D.OBLIGATED_BALANCE,
+      D.BALANCE_AMOUNT,
+      D.RELEASE_NUM,
+      D.PROJECT_NUMBER,
+      D.TASK_NUMBER,
+      D.ACCOUNT,
+      D.FUND, 
+      D.BUDYEAR, 
+      D.BPAC, 
+      D.ORGCODE, 
+      D.OBJECT_CLASS,        
+      D.STAGE_DATE ,
+      D.FISCAL_YEAR, 
+      D.FUND_TYPE, 
+      D.OBLIGATION_EXPIRATION_DATE, 
+      D.EXPENDITURE_EXPIRATION_DATE,      
+      D.CREATED_BY,
+      D.CREATED_ON
+    )
+    VALUES
+    (
+      S.CONTRACT_NUMBER,
+      S.LSD,
+      S.ACCOUNTING_CODE,
+      S.QUANTITY_ORDERED,
+      S.QUANTITY_CANCELLED,
+      S.QUANTITY_RECEIVED,
+      S.QUANTITY_BILLED,
+      S.OBLIGATED_BALANCE,
+      S.BALANCE_AMOUNT, 
+      S.RELEASE_NUM,
+      S.PROJECT_NUMBER,
+      S.TASK_NUMBER,
+      S.ACCOUNT,
+      S.FUND, 
+      S.BUDYEAR, 
+      S.BPAC, 
+      S.ORGCODE, 
+      S.OBJECT_CLASS,        
+      S.STAGE_DATE,
+      S.FISCAL_YEAR, 
+      S.FUND_TYPE, 
+      S.OBLIGATION_EXPIRATION_DATE, 
+      S.EXPENDITURE_EXPIRATION_DATE,         
+      'SP_MERGE_STAGE2_DETAIL', 
+      sysdate
+    );
+  --WHERE (S.Column =value);
+  IF SQL%FOUND THEN
+    p_PStatus := 'SUCCESS' ;
+    COMMIT;
+  END IF;
+EXCEPTION
+WHEN OTHERS THEN
+  p_PStatus := 'ERROR:' || SQLERRM;
+  ROLLBACK;
+END SP_MERGE_STAGE2_DETAIL;
+/

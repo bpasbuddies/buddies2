@@ -1,0 +1,1 @@
+CREATE INDEX eemrt.idx_delphi_contract_detail ON eemrt.delphi_contract_detail(contract_number);

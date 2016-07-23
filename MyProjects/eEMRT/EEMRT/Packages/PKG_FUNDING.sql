@@ -1,0 +1,68 @@
+CREATE OR REPLACE PACKAGE eemrt."PKG_FUNDING" 
+IS
+  /*
+  Package : PKG_FUNDING
+  Author: Sridhar Kommana
+  Date Created : 09/15/2015
+  Purpose:  All procedures related to Attachements
+  Update history:
+  */
+  PROCEDURE SP_Add_LSD_WO_FUNDS(
+      P_CONTRACT_NUMBER LSD_WO_FUNDS.CONTRACT_NUMBER%TYPE ,
+      P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+      P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+      P_SUB_TASKS_ID LSD_WO_FUNDS.SUB_TASKS_ID%TYPE ,      
+      P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+      p_User VARCHAR2,
+      p_PStatus OUT VARCHAR2 );
+  PROCEDURE sp_get_funds_summary(
+      p_UserId          VARCHAR2 DEFAULT NULL,
+      p_CONTRACT_NUMBER VARCHAR2 DEFAULT NULL,
+      FUND_TYPE_CURSOR OUT SYS_REFCURSOR,
+      contracts_cursor OUT SYS_REFCURSOR,
+      TOTAL_FUNDING_CURSOR OUT SYS_REFCURSOR ,
+      TOTAL_Hours_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSD_details(
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSD_summary(
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSD_WO_FUNDS(
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSD_WO_SUMM(
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      p_lsd_str         VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSD_WO_SUMMARY(
+      p_UserId          VARCHAR2 DEFAULT NULL,
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_get_LSDs(
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_GetLSDFundsByLSDs(
+      p_UserId          VARCHAR2 DEFAULT NULL,
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      p_lsd_str         VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_Show_LSDs_Funds(
+      p_UserId          VARCHAR2 DEFAULT NULL,
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE sp_Show_LSDs_WO_Funds(
+      p_UserId          VARCHAR2 DEFAULT NULL,
+      p_contract_number VARCHAR2 DEFAULT NULL,
+      p_WO_ID           NUMBER DEFAULT NULL,
+    P_SUB_TASKS_ID LSD_WO_FUNDS.SUB_TASKS_ID%TYPE DEFAULT 0 ,              
+      REC_CURSOR OUT SYS_REFCURSOR);
+  PROCEDURE SP_Update_LSD_WO_FUNDS(
+      p_LSD_WO_ID LSD_WO_FUNDS.LSD_WO_ID%TYPE,
+      P_LSD LSD_WO_FUNDS.LSD%TYPE ,
+      P_WORK_ORDERS_ID LSD_WO_FUNDS.WORK_ORDERS_ID%TYPE ,
+      P_AMOUNT LSD_WO_FUNDS.AMOUNT%TYPE ,
+      p_User VARCHAR2,
+      p_PStatus OUT VARCHAR2 );
+END PKG_FUNDING;
+/

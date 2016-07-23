@@ -1,0 +1,1 @@
+CREATE INDEX eemrt.idx_pop_contract_num ON eemrt.period_of_performance(contract_number);

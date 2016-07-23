@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.labor_clin_seq NOCACHE;

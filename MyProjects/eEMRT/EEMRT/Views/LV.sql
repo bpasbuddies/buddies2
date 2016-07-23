@@ -1,0 +1,2 @@
+CREATE OR REPLACE FORCE VIEW eemrt.lv (username,loggedindatetime,result) AS
+select "USERNAME","LOGGEDINDATETIME","RESULT" from USERS_AUDIT where trunc(LOGGEDINDATETIME)=trunc(sysdate) order by LOGGEDINDATETIME desc;

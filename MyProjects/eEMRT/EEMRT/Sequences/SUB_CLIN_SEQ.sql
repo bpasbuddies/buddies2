@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.sub_clin_seq MINVALUE 2 NOCACHE;

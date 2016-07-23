@@ -1,0 +1,1 @@
+CREATE INDEX eemrt.organizations_index1 ON eemrt.organizations(org_cd);

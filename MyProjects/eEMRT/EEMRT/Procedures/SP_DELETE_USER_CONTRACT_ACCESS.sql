@@ -1,0 +1,46 @@
+CREATE OR REPLACE PROCEDURE eemrt.SP_DELETE_USER_CONTRACT_ACCESS 
+(
+    P_USERID IN USERS.USERNAME%TYPE
+  , P_USERNAME IN USERS.USERNAME%TYPE
+  , P_CONTRACT_NUMBER IN CONTRACT.CONTRACT_NUMBER%TYPE
+  , P_COMMENTS IN CONTRACT_TASK_ACCESS.COMMENTS%TYPE DEFAULT NULL 
+  , P_PSTATUS OUT VARCHAR2 
+) AS 
+BEGIN
+  
+  /*
+    Procedure : SP_DELETE_USER_CONTRACT_ACCESS
+    Author: Sai Allu
+    Date Created : 06/23/2016
+    Purpose:  Updates Contract and Contract_Task_Access tables with status 'DELETED'
+    Update history:
+    */    
+
+  SP_INSERT_AUDIT(p_UserId, 'SP_DELETE_USER_CONTRACT_ACCESS update contract table: User Name: ' || p_USERNAME || ' Updated By: ' || p_UserId || ' Contract No: ' || P_CONTRACT_NUMBER  );
+  
+  UPDATE CONTRACT SET
+    STATUS = 'DELETED',
+    LAST_MODIFIED_BY = p_UserId,
+    LAST_MODIFIED_ON = SYSDATE
+  WHERE
+    UPPER(CONTRACT_NUMBER) = UPPER(P_CONTRACT_NUMBER) AND UPPER(CREATED_BY) = UPPER(P_USERNAME);
+  
+  SP_INSERT_AUDIT(p_UserId, 'SP_DELETE_USER_CONTRACT_ACCESS update contract task access table: User Name: ' || p_USERNAME || ' Updated By: ' || p_UserId || ' Contract No: ' || P_CONTRACT_NUMBER  );
+  
+  UPDATE CONTRACT_TASK_ACCESS SET
+    STATUS = 'DELETED',
+    UPDATED_BY = p_UserId,
+    UPDATED_ON = SYSDATE,
+    COMMENTS = p_COMMENTS
+  WHERE
+    UPPER(CONTRACTNUMBER) = UPPER(P_CONTRACT_NUMBER) AND UPPER(USERNAME) = UPPER(P_USERNAME);
+  
+  p_pStatus := 'SUCCESS';
+  
+  EXCEPTION WHEN OTHERS THEN 
+    BEGIN
+      SP_INSERT_AUDIT(p_UserId, 'Error in SP_DELETE_USER_CONTRACT_ACCESS User Name: ' || p_USERNAME || ' Updated By: ' || p_UserId || ' Contract No: ' || P_CONTRACT_NUMBER  );
+      p_pStatus := 'Error: ' || SQLERRM;
+    END;
+END SP_DELETE_USER_CONTRACT_ACCESS;
+/

@@ -1,0 +1,22 @@
+CREATE TABLE eemrt.mitre_invoice_detail (
+  mid_invoice_number NUMBER,
+  mid_clin VARCHAR2(20 BYTE),
+  mid_outcome NUMBER,
+  mid_project_number VARCHAR2(20 BYTE),
+  mid_po_number VARCHAR2(50 BYTE),
+  mid_mod_number VARCHAR2(50 BYTE),
+  mid_date_mod_signed VARCHAR2(200 BYTE),
+  mid_funding_type VARCHAR2(20 BYTE),
+  mid_ceiling_year VARCHAR2(20 BYTE),
+  mid_funding_citation VARCHAR2(200 BYTE),
+  mid_name_of_funds VARCHAR2(200 BYTE),
+  mid_funding_available VARCHAR2(50 BYTE),
+  mid_contract_itd_billed_exp VARCHAR2(50 BYTE),
+  mid_remaining_funding VARCHAR2(50 BYTE),
+  mid_percent_funds_expensed VARCHAR2(20 BYTE),
+  mid_contract_number VARCHAR2(200 BYTE),
+  mid_created_by VARCHAR2(50 BYTE),
+  mid_created_on TIMESTAMP,
+  mid_updated_by VARCHAR2(50 BYTE),
+  mid_updated_on TIMESTAMP
+);

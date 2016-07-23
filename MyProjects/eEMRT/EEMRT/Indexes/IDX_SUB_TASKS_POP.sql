@@ -1,0 +1,1 @@
+CREATE INDEX eemrt.idx_sub_tasks_pop ON eemrt.sub_tasks(period_of_performance_id);

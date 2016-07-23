@@ -1,0 +1,21 @@
+CREATE TABLE eemrt.task_contractors (
+  task_contractor_id NUMBER NOT NULL,
+  contractor_id NUMBER NOT NULL,
+  work_order_id NUMBER,
+  subtask_id NUMBER,
+  clin_id NUMBER,
+  labor_category_id NUMBER,
+  created_by VARCHAR2(20 BYTE),
+  created_on TIMESTAMP,
+  updated_by VARCHAR2(20 BYTE),
+  updated_on TIMESTAMP,
+  woc_id NUMBER,
+  stc_id NUMBER,
+  sub_clin_id NUMBER,
+  CONSTRAINT task_contractors_pk PRIMARY KEY (task_contractor_id),
+  CONSTRAINT task_contractors_uk1 UNIQUE (contractor_id,work_order_id,subtask_id,clin_id,labor_category_id,sub_clin_id),
+  CONSTRAINT task_contractors_fk1 FOREIGN KEY (contractor_id) REFERENCES eemrt.contractors_t (contractor_id),
+  CONSTRAINT task_contractors_fk2 FOREIGN KEY (work_order_id) REFERENCES eemrt.work_orders (work_orders_id) DISABLE NOVALIDATE,
+  CONSTRAINT task_contractors_fk3 FOREIGN KEY (subtask_id) REFERENCES eemrt.sub_tasks (sub_tasks_id) DISABLE NOVALIDATE,
+  CONSTRAINT task_contractors_fk4 FOREIGN KEY (clin_id) REFERENCES eemrt.pop_clin (clin_id) DISABLE NOVALIDATE
+);

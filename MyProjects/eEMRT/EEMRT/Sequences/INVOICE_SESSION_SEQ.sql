@@ -1,0 +1,1 @@
+CREATE SEQUENCE eemrt.invoice_session_seq NOCACHE;
